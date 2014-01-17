@@ -1,5 +1,6 @@
 
 import struct
+import bitstring
 
 class TxPkt():
 
@@ -127,26 +128,72 @@ def hexify(inStr):
 class RxPkt():
 
 	packetLookups = \
-	{ "\x40\x84" : {"len" : 22,    		# BootResponse
-					"decodeStr" : ""},
-	  "\x40\x80" : {"len" : 1,     		# BootConfirmResponse
-	  				"decodeStr" : ""},
-	  "\xA0\x13" : {"len" : 11,    		# BroadcastResponse
-	  				"decodeStr" : ""},
-	  "\xA0\xF9" : {"len" : 1,     		# LockResponse
-	  				"decodeStr" : ""},
-	  "\x40\x22" : {"len" : 1,     		# UpdateTimeAckResponse
-	  				"decodeStr" : ""},
-	  "\x40\xA2" : {"len" : 3,     		# UpdateTimeResponse
-	  				"decodeStr" : ""},
-	  "\x40\x03" : {"len" : 1,     		# HandshakeResponse
-	  				"decodeStr" : ""},
-	  "\x40\x24" : {"len" : 1,     		# AckResponse
-	  				"decodeStr" : ""},
-	  "\x40\xA4" : {"len" : None,  		# SamplesResponse
-	  				"decodeStr" : ""},
-	  "\x40\x23" : {"len" : 1,     		# ScheduleResponse
-	  				"decodeStr" : ""}}
+	{ "\x40\x84" :{"len"          : 22,    		# BootResponse
+					"decodeStr"   : "!"+"x"*12+"Q"+"x"*2,
+					"data"        : None},
+
+	  "\x40\x80" :{"len"          : 1,     		# BootConfirmResponse
+	  				"decodeStr"   : None,
+	  				"data"        : "\x10"},
+
+	  "\xA0\x13" :{"len"          : 11,    		# BroadcastResponse
+	  				"decodeStr"   : None,
+	  				"data"        : None},
+
+	  "\xA0\xF9" :{"len"          : 1,     		# LockResponse
+	  				"decodeStr"   : None,
+	  				"data"        : "\x00"},
+
+	  "\x40\x22" :{"len"          : 1,     		# UpdateTimeAckResponse
+	  				"decodeStr"   : None,
+	  				"data"        : "\x00"},
+
+	  "\x40\xA2" :{"len"          : 3,     		# UpdateTimeResponse
+	  				"decodeStr"   : None,
+	  				"data"        : None},	# only partially specified. Needs more work
+
+	  "\x40\x03" :{"len"          : 1,     		# HandshakeResponse
+	  				"decodeStr"   : None,
+	  				"data"        : "\x00"},
+
+	  "\x40\x24" :{"len"          : 1,     		# AckResponse
+	  				"decodeStr"   : None,
+	  				"data"        : "\x00"},
+
+	  "\x40\xA4" :{"len"          : None,  		# SamplesResponse
+	  				"decodeStr"   : "overridden in constructor",
+	  				"data"        : None},
+
+	  "\x40\x23" :{"len"          : 1,     		# ScheduleResponse
+	  				"decodeStr"   : None,
+	  				"data"        : None}}
+
+
+	#modletMac = "0x591a100000584f80"
+	def processDataSamplePkt(self, dataIn):
+		print "decoding?"
+		bs = bitstring.ConstBitStream(bytes=dataIn)
+		network_id      = bs.read("uintbe:16")		# 2
+		channel_id      = bs.read("uintbe:16")		# 2
+		something1      = bs.read("uintbe:16")		# 2
+		time            = bs.read("uintle:32")		# 4
+		sampleCount     = bs.read("uintbe:8")		# 1
+		availableCount  = bs.read("uintle:24")		# 3
+		# Total header len = 14
+		print "Read Values = ", "network_id", network_id, 
+		print "channel_id", channel_id, 
+		print "something1", something1, 
+		print "time", time, 
+		print "sampleCount", sampleCount, 
+		print "availableCount", availableCount
+
+		samples = []
+		for x in range(0, sampleCount):
+			print "Sample ", x
+			samples.append(bs.read("uintle:16")/13.0)
+
+		print "Data len = ", len(dataIn) - 14
+		return samples
 
 	def __init__(self):
 
@@ -155,6 +202,9 @@ class RxPkt():
 		self.byteNo = 0
 		self.payLen = 0
 		self.data = ""
+		self.checksum = 0
+
+		self.packetLookups["\x40\xA4"]["decodeStr"] = self.processDataSamplePkt   # Haaaack
 
 	def checkCheckSum(self, checksum):
 		fields = [self.command, chr(self.payLen), self.data]
@@ -164,13 +214,34 @@ class RxPkt():
 				chk ^= ord(byte)
 		chk ^= ord(checksum)
 		if chk:
-			raise ValueError("INVALID CHECKSUM", )
+			raise ValueError("INVALID CHECKSUM")
 
-		print "Received = ", hexify(self.command), hexify(chr(self.payLen)), hexify(self.data), hexify(checksum)
+		self.checksum = checksum
 
-	def check(self, inByte, wantByte):
-		if inByte != wantByte:
-			print "INVALID BYTE", hex(ord(inByte)), hex(ord(wantByte)), "at byte no", self.byteNo
+	def processValidPacket(self):
+
+		# Check against prefedined data values, if we have any
+		if self.packetLookups[self.command]["data"]:
+			if self.packetLookups[self.command]["data"] != self.data:
+				raise ValueError("Packet data does not match! Expected", hexify(self.packetLookups[self.command]["data"]), "received", hexify(self.data))
+
+		# Decode if decoder is specified
+		ret = ""
+		print "Trying to decode",  hexify(self.command)
+		lookup = self.packetLookups[self.command]["decodeStr"]
+		if lookup:
+			if callable(lookup):
+				ret = lookup(self.data)
+			else:
+				ret = struct.unpack(self.packetLookups[self.command]["decodeStr"], self.data)
+				print hex(ret[0])
+
+		print "Received = ", hexify(self.command), hexify(chr(self.payLen)), hexify(self.data), hexify(self.checksum)
+		return ret
+
+	def check(self, wantVal, inVal):
+		if wantVal != inVal:
+			print "INVALID VALUE", hexify(wantVal), hexify(inVal), "at byte no", self.byteNo
 
 	def checkLen(self):
 		if self.command in self.packetLookups:
@@ -185,34 +256,37 @@ class RxPkt():
 		if self.byteNo == 0:				# Header byte
 			self.check(byte, self.header)
 			self.byteNo += 1
-			return True
+			return True, []
 
 		if self.byteNo == 1:				# Command byte 1
 			self.command = byte
 			self.byteNo += 1
-			return True
+			return True, []
 
 		if self.byteNo == 2:				# Command byte 2
 			self.command += byte
 			self.byteNo += 1
-			#print "Have command = ", hexify(self.command),
-			return True
+			if not self.command in self.packetLookups:
+				raise ValueError("Invalid Packet Command", hexify(self.command))
+
+			return True, []
 
 		if self.byteNo == 3:				# data length byte
 			self.payLen = ord(byte)
 			self.byteNo += 1
 			#print "Packet length = ", self.payLen,
 			self.checkLen()
-			return True
+			return True, []
 
-		if self.byteNo > 3 and self.byteNo <= 3+self.payLen:
+		if self.byteNo > 3 and self.byteNo <= 3+self.payLen:		# Data bytes
 			self.data += byte
 			self.byteNo += 1
-			return True
+			return True, []
 
-		if self.byteNo >= 3+self.payLen:
+		if self.byteNo >= 3+self.payLen:			# And the LRC checksum
 			#print "On Checksum"
 			self.checkCheckSum(byte)
-			return False
+			ret = self.processValidPacket()
+			return False, ret
 
 

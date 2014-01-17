@@ -25,11 +25,15 @@ class Hacklet():
 		rx = pkts.RxPkt()
 		ret = ""
 		remaining = 500
+
+		#todo: TIMEOUTS
 		while remaining:
 			readBytes, dat = ftdi1.read_data(self.ftdic, 1)
 			if readBytes:
-				remaining = rx.checkByte(dat)
-
+				remaining, ret = rx.checkByte(dat)
+				
+		if ret:
+			print "ret", ret
 		return ret
 
 	def __del__(self):
@@ -63,5 +67,8 @@ if __name__ == "__main__":
 	hak.write(pkts.LockRequestPkt().getPacketStr())
 	hak.read()
 	hak.write(pkts.SamplesRequestPkt(0).getPacketStr())
+	hak.read()
+	hak.read()
+	hak.write(pkts.SamplesRequestPkt(1).getPacketStr())
 	hak.read()
 	hak.read()
