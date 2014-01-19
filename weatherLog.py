@@ -38,6 +38,10 @@ class ThermBaroLogger():
 			if pres < 90000.0:
 				print "BAD PRESSURE VALUE. Ignoring readings!"
 				return
+			if not pres or not temp:
+				print "BAD READING?. Ignoring readings!"
+				return
+			
 			self.tmpLog.append(temp)
 			self.presLog.append(pres)
 
@@ -49,9 +53,9 @@ class ThermBaroLogger():
 			print "TempBaro doesn't have any data?"
 			return None, None
 
+		print "Processing", len(self.tmpLog), "temperature samples,", len(self.presLog), "pressure samples."
 		avgTmp = sum(self.tmpLog)/float(len(self.tmpLog))
 		avgPrs = sum(self.presLog)/float(len(self.presLog))
-		print "Processing", len(self.tmpLog), "temperature samples,", len(self.presLog), "pressure samples."
 		self.tmpLog = []
 		self.presLog = []
 		return avgTmp, avgPrs
@@ -60,11 +64,13 @@ if __name__ == "__main__":
 	print "Starting"
 
 
+	apiKey = open("../emoncmsApiKey.conf", "r").read()
+	print "Loaded APIKey as ", apiKey
 
 	monBuf = EmonFeeder.EmonFeeder(protocol = 'https://',
 								   domain = '10.1.1.39',
 								   path = '/emoncms',
-								   apikey = "[YOUR KEY HERE]",
+								   apikey = apiKey,
 								   period = 10)
 
 

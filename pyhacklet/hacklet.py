@@ -307,6 +307,8 @@ class RxPkt():
 			ret = self.processValidPacket()
 			return False, ret
 
+class TimeoutError(Exception):
+	pass
 
 
 import ftdi1
@@ -341,7 +343,7 @@ class Hacklet():
 				remaining, ret = rx.checkByte(dat)
 
 			if time.time() > start+3:
-				print "TIMED OUT!"
+				raise TimeoutError("Timed Out!")
 				break
 				
 		#if ret:
