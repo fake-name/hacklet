@@ -64,7 +64,7 @@ if __name__ == "__main__":
 	monBuf = EmonFeeder.EmonFeeder(protocol = 'https://',
 								   domain = '10.1.1.39',
 								   path = '/emoncms',
-								   apikey = "1c30034bd4ebd60f9c95a13decd0a3ce",
+								   apikey = "[YOUR KEY HERE]",
 								   period = 10)
 
 
