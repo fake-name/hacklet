@@ -14,3 +14,9 @@ The main modlet interface is in the `pyhacklet` directory. The scripts in the re
 ---
 
 This was written using the original [hacklet](https://github.com/mcolyer/hacklet) code as reference for the modlet API. @mcolyer did all the hard reverse-engineering, I just wish he hadn't used ruby. 
+
+---
+
+Anyways, this is very alpha-release at this point. I don't know how the modlet hardware will deal with extremely-long-running open serial connections. Previously, my modlet data-logging had involved reinitializing the serial port once per read, as that was a limitation of the way I had to call the original hacklet script (as a subprocess). 
+
+Keeping the connection open, as well as the fact that the whole ruby interpreter doesn't need to be called for EVERY reading means this is **dramatically** lighter with regard to resource usage, a particularly important consideration when running this tool on a Raspberry Pi, as I am.
