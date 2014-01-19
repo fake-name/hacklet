@@ -34,7 +34,7 @@ class ThermBaroLogger():
 				except ValueError:
 					print "Started part-way through a packet"
 
-			print "Pres:", temp, "Pres:", pres
+			print "Temp:", temp, "Pres:", pres
 			if pres < 90000.0:
 				print "BAD PRESSURE VALUE. Ignoring readings!"
 				return
