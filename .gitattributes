@@ -1,0 +1,2 @@
+# Make everything unix-style
+*.* text eol=lf
