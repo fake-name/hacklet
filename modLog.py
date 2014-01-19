@@ -16,14 +16,7 @@ if __name__ == "__main__":
 							  apikey = "1c30034bd4ebd60f9c95a13decd0a3ce",
 							  period = 15)
 
-
-
 	hak = hacklet.Hacklet()
-
-	# hacklet:
-	# Found device 0x591a100000584f80 on network 0xe771
-	# hacklet read -n 0x591a100000584f80 -s 1
-	modletMac = "0x591a100000584f80"
 
 	while 1:
 		s1, s2 = hak.getReadings()
