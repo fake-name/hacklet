@@ -15,6 +15,12 @@ class WeatherLogger():
 		self.tmpLog = []
 		self.presLog = []
 
+		self.resetArduino()
+
+	def resetArduino(self):
+		self.port.setDTR(False)
+		self.port.setDTR(True)
+
 	def __del__(self):
 		print "Closing port"
 		self.port.close()
@@ -35,7 +41,7 @@ class WeatherLogger():
 
 				if key == "Temperature":
 					temp = float(val)
-				if key == "Pressure": 
+				if key == "Pressure":
 					pres = float(val)
 			except ValueError:
 				traceback.print_exc()
@@ -49,23 +55,24 @@ class WeatherLogger():
 		if not pres or not temp:
 			print "BAD READING?. Ignoring readings!"
 			return
-		
+
 		self.tmpLog.append(temp)
 		self.presLog.append(pres)
 
+	'''
 	def procWind(self, inStr):
 		print "Received Anemometer data = ", inStr
 		header, content = inStr.split("|")
 		# print "Header = ", "\"", header, "\""
 		# print "Content = ", "\"", content, "\""
-		
+
 		windDir = None
 		windVel = None
 		extTemp = None
 		extHumi = None
-		
+
 		content = content.split()
-		
+
 		for item in content:
 
 			try:
@@ -78,29 +85,45 @@ class WeatherLogger():
 					windDir = int(val)
 				if key == "Temperature":
 					extTemp = float(val)
-				if key == "Temperature": 
+				if key == "Temperature":
 					extHumi = float(val)
 			except ValueError:
 				traceback.print_exc()
 				print "Started part-way through a packet"
 				print "\"", item, "\""
 
-			
-
 		#Anemometer:10160.00 WindDir:8 Humidity:39 Temperature:21
+	'''
+
+
+
+	def handleRfReport(self, inStr):
+		if not ("|" in inStr and ":" in inStr):
+			print "Bad RF Report!", inStr
+			return
+
+		header, body = inStr.split("|")
+		headerNum = int(header.split(":")[-1])
+		headerHex = body.split()
+
+		print "Header = ", headerNum, "Body = ", headerHex
+		if len(headerHex) != headerNum:
+			print "Invalid packet length!"
+		else:
+			print "Valid length"
 
 	def procRx(self):
 		self.tmpStr += self.port.read(50)
 		if "\r" in self.tmpStr:
 			out, self.tmpStr = self.tmpStr.split("\r", 1)
 			out = out.rstrip().lstrip()
-			if "AnemometerStation | " in out:
-				self.procWind(out)
+			if out.startswith("RxRf"):
+				self.handleRfReport(out)
 			elif "ServerBarometer | " in out:
 				self.procBaro(out)
 			else:
 				print "Bad Data Chunk: \"", out, "\""
-			
+
 
 	def getThermBaroValues(self):
 		if self.tmpLog == None and self.presLog == None:
@@ -111,11 +134,11 @@ class WeatherLogger():
 			return None, None
 
 		print "Processing", len(self.tmpLog), "temperature samples,", len(self.presLog), "pressure samples."
-		avgTmp = sum(self.tmpLog)/float(len(self.tmpLog))
-		avgPrs = sum(self.presLog)/float(len(self.presLog))
+		avgTmpRet = sum(self.tmpLog)/float(len(self.tmpLog))
+		avgPrsRet = sum(self.presLog)/float(len(self.presLog))
 		self.tmpLog = []
 		self.presLog = []
-		return avgTmp, avgPrs
+		return avgTmpRet, avgPrsRet
 
 
 if __name__ == "__main__":
@@ -131,10 +154,11 @@ if __name__ == "__main__":
 								   apikey = apiKey,
 								   period = 10)
 
-
+	print "Opening serial port"
 	weatherInterface = WeatherLogger('/dev/ttyACM0')
 
 
+	print "Setup complete."
 
 	while 1:
 		weatherInterface.procRx()
@@ -144,6 +168,6 @@ if __name__ == "__main__":
 			avgTmp, avgPrs = weatherInterface.getThermBaroValues()
 			if avgTmp != None and avgPrs != None:
 				monBuf.add_data(["1", avgTmp, avgPrs])
-			
+
 			monBuf.send_data()
 		time.sleep(0.05)
