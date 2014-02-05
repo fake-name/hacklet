@@ -6,7 +6,27 @@ import time
 import serial
 import traceback
 
+# Manual CRC, because it's interesting
+class CRC():
+	def __init__(self, crcPolynomial, crcLen=8):
+		self.poly = crcPolynomial
+		self.len = crcLen
+		self.crc = 0
+	def addByte(self, inByte):
+
+		for x in xrange(self.len):
+			mask = (inByte ^ self.crc) & 0x01
+			self.crc >>= 1
+			if mask:
+				self.crc ^= self.poly
+			inByte >>= 1
+
+	def getResult(self):
+		return self.crc
+
 class WeatherLogger():
+
+	dsCrcPoly = 0x8C
 
 	def __init__(self, portStr):
 		self.port = serial.Serial(portStr, 115200, timeout=0)
@@ -103,14 +123,55 @@ class WeatherLogger():
 			return
 
 		header, body = inStr.split("|")
+		body, crcVal = body.split(":")
 		headerNum = int(header.split(":")[-1])
-		headerHex = body.split()
+		body = body.split()
 
-		print "Header = ", headerNum, "Body = ", headerHex
-		if len(headerHex) != headerNum:
+		if len(body) != headerNum:
 			print "Invalid packet length!"
-		else:
-			print "Valid length"
+			return
+		if crcVal != "1":
+			print "Bad CRC!"
+			return
+
+
+		sensorPort = int(body[0], 16)
+		sensID = body[1:9]
+		rawStr = "0x"
+
+		crcCheck = CRC(crcPolynomial = self.dsCrcPoly)
+
+		for item in sensID:
+			if len(item) == 1:
+				item = "0"+item
+			rawStr += item
+
+			inByte = int(item, 16)
+			crcCheck.addByte(inByte)
+
+		if crcCheck.getResult() is not 0:
+			print "Invalid Address CRC!"
+			return
+
+		sensDat = body[9:18]
+
+		crcCheck = CRC(crcPolynomial = self.dsCrcPoly)
+		for item in sensDat:
+			inByte = int(item, 16)
+			crcCheck.addByte(inByte)
+		if crcCheck.getResult() is not 0:
+			print "Invalid Data CRC!"
+			return
+
+
+
+		temp   = int(sensDat[1], 16) << 8 | int(sensDat[0], 16)
+		print "Temp = ", temp*0.0625
+
+
+		print "SensorID = ", rawStr,
+
+		print "Header = ", headerNum, "Body = ", body, "CRC = ", crcVal, "sensPort = ", sensorPort
 
 	def procRx(self):
 		self.tmpStr += self.port.read(50)
@@ -144,30 +205,39 @@ class WeatherLogger():
 if __name__ == "__main__":
 	print "Starting"
 
+	try:
+		apiKey = open("../emoncmsApiKey.conf", "r").read()
+		print "Loaded APIKey as", apiKey
+		serverIP = '10.1.1.39'
+		testMode = False
+	except IOError:
+		print "No API Key file. Running in test-mode"
+		apiKey = "wat"
+		serverIP = '127.0.0.1'
+		testMode = True
 
-	apiKey = open("../emoncmsApiKey.conf", "r").read()
-	print "Loaded APIKey as", apiKey
 
 	monBuf = EmonFeeder.EmonFeeder(protocol = 'https://',
-								   domain = '10.1.1.39',
+								   domain = serverIP,
+								   testMode = testMode,
 								   path = '/emoncms',
 								   apikey = apiKey,
 								   period = 10)
 
 	print "Opening serial port"
-	weatherInterface = WeatherLogger('/dev/ttyACM0')
+	weatherInterface = WeatherLogger('COM11')
 
 
 	print "Setup complete."
 
 	while 1:
 		weatherInterface.procRx()
-		if monBuf.check_time():
+		# if monBuf.check_time():
 
-			print "Data transmission interval complete: Ready to send"
-			avgTmp, avgPrs = weatherInterface.getThermBaroValues()
-			if avgTmp != None and avgPrs != None:
-				monBuf.add_data(["1", avgTmp, avgPrs])
+		# 	print "Data transmission interval complete: Ready to send"
+		# 	avgTmp, avgPrs = weatherInterface.getThermBaroValues()
+		# 	if avgTmp != None and avgPrs != None:
+		# 		monBuf.add_data(["1", avgTmp, avgPrs])
 
-			monBuf.send_data()
+		# 	monBuf.send_data()
 		time.sleep(0.05)
