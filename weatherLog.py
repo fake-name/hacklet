@@ -6,6 +6,12 @@ import time
 import serial
 import traceback
 
+
+sensorDict = {
+	"0x8855A50500": 100,
+	"0x9CF3A40500": 101,
+}
+
 # Manual CRC, because it's interesting
 class CRC():
 	def __init__(self, crcPolynomial, crcLen=8):
@@ -152,8 +158,13 @@ class WeatherLogger():
 
 
 
-		temp   = int(sensDat[1], 16) << 8 | int(sensDat[0], 16)
-		print "Temp = %f, Sensor Serial = %s, sensPort = %d" % (temp*0.0625, sensIdStr, sensorPort)
+		temp   = (int(sensDat[1], 16) << 8 | int(sensDat[0], 16))*0.0625
+
+		if sensIdStr in sensorDict:
+			sensorNo = sensorDict[sensIdStr]
+			monBuf.add_data([sensorNo, temp])
+
+		print "Temp = %f, Sensor Serial = %s, sensPort = %d" % (temp, sensIdStr, sensorPort)
 
 	def handleRfReport(self, inStr):
 		if not ("|" in inStr and ":" in inStr):
@@ -239,12 +250,12 @@ if __name__ == "__main__":
 
 	while 1:
 		weatherInterface.procRx()
-		# if monBuf.check_time():
+		if monBuf.check_time():
 
-		# 	print "Data transmission interval complete: Ready to send"
-		# 	avgTmp, avgPrs = weatherInterface.getThermBaroValues()
-		# 	if avgTmp != None and avgPrs != None:
-		# 		monBuf.add_data(["1", avgTmp, avgPrs])
+			print "Data transmission interval complete: Ready to send"
+			avgTmp, avgPrs = weatherInterface.getThermBaroValues()
+			if avgTmp != None and avgPrs != None:
+				monBuf.add_data(["1", avgTmp, avgPrs])
 
-		# 	monBuf.send_data()
+			monBuf.send_data()
 		time.sleep(0.05)
