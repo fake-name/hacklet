@@ -115,39 +115,26 @@ class WeatherLogger():
 		#Anemometer:10160.00 WindDir:8 Humidity:39 Temperature:21
 	'''
 
-
-
-	def handleRfReport(self, inStr):
-		if not ("|" in inStr and ":" in inStr):
-			print "Bad RF Report!", inStr
-			return
-
-		header, body = inStr.split("|")
-		body, crcVal = body.split(":")
-		headerNum = int(header.split(":")[-1])
-		body = body.split()
-
-		if len(body) != headerNum:
-			print "Invalid packet length!"
-			return
-		if crcVal != "1":
-			print "Bad CRC!"
-			return
-
-
+	def parseDS18B20Data(self, body):
 		sensorPort = int(body[0], 16)
+		devType = body[1]
+
+		if devType != "28":
+			print "This is not a DS18B20 sensor!"
+
 		sensID = body[1:9]
-		rawStr = "0x"
+		sensIdStr = "0x"
 
 		crcCheck = CRC(crcPolynomial = self.dsCrcPoly)
 
 		for item in sensID:
-			if len(item) == 1:
-				item = "0"+item
-			rawStr += item
-
 			inByte = int(item, 16)
 			crcCheck.addByte(inByte)
+
+		for item in sensID[1:-2]:	# JUST the unique ID bit
+			if len(item) == 1:
+				item = "0"+item
+			sensIdStr += item
 
 		if crcCheck.getResult() is not 0:
 			print "Invalid Address CRC!"
@@ -166,12 +153,32 @@ class WeatherLogger():
 
 
 		temp   = int(sensDat[1], 16) << 8 | int(sensDat[0], 16)
-		print "Temp = ", temp*0.0625
+		print "Temp = %f, Sensor Serial = %s, sensPort = %d" % (temp*0.0625, sensIdStr, sensorPort)
+
+	def handleRfReport(self, inStr):
+		if not ("|" in inStr and ":" in inStr):
+			print "Bad RF Report!", inStr
+			return
+
+		header, body = inStr.split("|")
+		body, crcVal = body.split(":")
+		headerNum = int(header.split(":")[-1])
+		body = body.split()
 
 
-		print "SensorID = ", rawStr,
 
-		print "Header = ", headerNum, "Body = ", body, "CRC = ", crcVal, "sensPort = ", sensorPort
+		if len(body) != headerNum:
+			print "Invalid packet length!"
+			return
+		if crcVal != "1":
+			print "Bad CRC!"
+			return
+
+		if body[0] == "1" or body[0] == "2" or body[0] == "3":
+			self.parseDS18B20Data(body)
+
+		else:
+			print "Don't know sensor ID!", inStr
 
 	def procRx(self):
 		self.tmpStr += self.port.read(50)
