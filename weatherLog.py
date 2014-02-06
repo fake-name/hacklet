@@ -41,6 +41,8 @@ class WeatherLogger():
 		self.tmpLog = []
 		self.presLog = []
 
+		self.dsLog = {}
+
 		self.resetArduino()
 
 	def resetArduino(self):
@@ -162,7 +164,10 @@ class WeatherLogger():
 
 		if sensIdStr in sensorDict:
 			sensorNo = sensorDict[sensIdStr]
-			monBuf.add_data([sensorNo, temp])
+			if not sensorNo in self.dsLog:
+				self.dsLog[sensorNo] = [temp]
+			else:
+				self.dsLog[sensorNo].append(temp)
 
 		print "Temp = %f, Sensor Serial = %s, sensPort = %d" % (temp, sensIdStr, sensorPort)
 
@@ -219,6 +224,14 @@ class WeatherLogger():
 		self.presLog = []
 		return avgTmpRet, avgPrsRet
 
+	def getDsItems(self):
+		ret = []
+		for sensorNo, data in self.dsLog.iteritems():
+			average = sum(data)/float(len(data))
+			ret.append([sensorNo, average])
+
+		return ret
+
 
 if __name__ == "__main__":
 	print "Starting"
@@ -243,7 +256,7 @@ if __name__ == "__main__":
 								   period = 10)
 
 	print "Opening serial port"
-	weatherInterface = WeatherLogger('COM11')
+	weatherInterface = WeatherLogger('/dev/ttyACM0')
 
 
 	print "Setup complete."
@@ -256,6 +269,7 @@ if __name__ == "__main__":
 			avgTmp, avgPrs = weatherInterface.getThermBaroValues()
 			if avgTmp != None and avgPrs != None:
 				monBuf.add_data(["1", avgTmp, avgPrs])
-
+			for item in weatherInterface.getDsItems():
+				monBuf.add_data(item)
 			monBuf.send_data()
 		time.sleep(0.05)
