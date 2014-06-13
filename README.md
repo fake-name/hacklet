@@ -1,3 +1,7 @@
+Update: My modlet spontaneously stopped reporting, and will not restart. As such, I will likely not be updating this in the future.
+=======
+
+
 Python rewrite of the Hacklet tool.
 =======
 
